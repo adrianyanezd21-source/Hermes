@@ -3,7 +3,7 @@
 // Prioridad (auto):
 //   1. CHAT_PROVIDER explícito en .env (hermes | openai | demo)
 //   2. CLI de Hermes disponible      -> hermes
-//   3. LLM_BASE_URL configurado      -> openai (Ollama / OpenRouter :free)
+//   3. LLM_BASE_URL configurado      -> openai (OpenRouter :free)
 //   4. fallback                      -> demo
 import config from './config.js';
 import hermes from './hermes.js';

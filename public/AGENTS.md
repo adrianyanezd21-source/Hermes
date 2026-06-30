@@ -17,7 +17,7 @@ Owns the HTML shell, styles, and client JS. Talks only to the backend `/api` and
 ## Pages of note
 
 - **Office** (`renderOffice`) — PixiJS isometric animated office: floor tiles, desks, one character per agent with a status-colored ring + bob animation; polls `/api/office/agent-states` (4s) plus kanban and live-feed panels. Its Pixi app + interval MUST be torn down by `teardownTransient()` (called at the top of `router()`), or the WebGL ticker leaks across navigations.
-- **Chat** (`renderChat`) — shows the active provider badge from `/api/chat/provider` and warns when in demo mode. The CSP must keep `blob:` in `script-src`/`img-src` and a `worker-src 'self' blob:` for PixiJS.
+- **Chat** (`renderChat`) — shows the active provider badge from `/api/chat/provider` and warns when in demo mode. Includes FREE browser voice: TTS (`speechSynthesis`, toggle + voice picker, prioritizes `es-*` voices, speaks the full reply on `done`) and mic dictation (`SpeechRecognition`/`webkitSpeechRecognition`, `es-ES`). No API key needed. The CSP must keep `blob:` in `script-src`/`img-src` and a `worker-src 'self' blob:` for PixiJS.
 
 ## Work Guidance
 

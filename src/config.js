@@ -26,7 +26,7 @@ export const config = {
   // Endpoint OpenAI-compatible para el chat gratuito (Ollama / OpenRouter).
   llmBaseUrl: process.env.LLM_BASE_URL || '',
   llmApiKey: process.env.LLM_API_KEY || '',
-  llmModel: process.env.LLM_MODEL || 'llama3.2',
+  llmModel: process.env.LLM_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
   dataDir: path.join(repoRoot, 'data'),
   publicDir: path.join(repoRoot, 'public'),
 };

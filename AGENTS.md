@@ -40,8 +40,9 @@ Self-hosted web panel to control the **Hermes** AI agent (Nous Research) from th
 
 ## Ownership
 
-- Root owns: project-wide conventions, the runtime entry (`server.js`), packaging (`package.json`), env contract (`.env.example`), and the Child DOX Index below.
+- Root owns: project-wide conventions, the runtime entry (`server.js`), packaging (`package.json`), env contract (`.env.example`), the roadmap (`PLAN.md`), and the Child DOX Index below.
 - `server.js` wires Express, sessions, the security headers/CSP, `/auth/*` routes, the `/api` router, static SPA serving, and the chat WebSocket.
+- `PLAN.md` is the extensive roadmap to reach feature parity with the reference panel (`xaspx/hermes-control-interface`); keep its ✅/🟡/⬜ status in sync when features land.
 
 ## Local Contracts
 

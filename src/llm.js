@@ -1,9 +1,8 @@
 // Cliente de chat compatible con la API de OpenAI (streaming SSE).
 //
-// Funciona con cualquier endpoint OpenAI-compatible. Pensado para las
-// dos opciones GRATIS de "hablarle" al agente:
-//   1. Ollama (local, 100% gratis):   base http://localhost:11434/v1
-//   2. OpenRouter modelos ":free":     base https://openrouter.ai/api/v1
+// Funciona con cualquier endpoint OpenAI-compatible. Opción GRATIS
+// recomendada para "hablarle" al agente:
+//   OpenRouter modelos ":free":  base https://openrouter.ai/api/v1
 import config from './config.js';
 
 const SYSTEM_PROMPT =

@@ -370,30 +370,108 @@ async function renderChat(view) {
   ]);
   const opts = agents.map((a) => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('');
   const provBadge = `<span class="badge ${prov.free ? 'ok' : ''}" title="Proveedor de chat activo">${prov.free ? '🆓 ' : ''}${esc(prov.label || prov.provider)}</span>`;
-  view.innerHTML = head('Chat', 'Conversa con Hermes en tiempo real',
-    `${provBadge}<select id="ch-profile">${opts || '<option>default</option>'}</select>`) + `
+
+  // Voz: TTS y reconocimiento por micrófono vía Web Speech API (gratis, en el navegador).
+  const ttsOk = 'speechSynthesis' in window;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const micOk = !!SR;
+
+  view.innerHTML = head('Chat', 'Conversa con Hermes en tiempo real (voz gratis del navegador)',
+    `${provBadge}
+     <button class="btn sm" id="ch-tts" title="Leer respuestas en voz alta">🔊 Voz: off</button>
+     <select id="ch-voice" title="Voz" style="max-width:160px"></select>
+     <select id="ch-profile">${opts || '<option>default</option>'}</select>`) + `
     <div class="chat-wrap">
       <div class="chat-log" id="ch-log"></div>
       <div class="chat-input">
-        <textarea id="ch-text" placeholder="Escribe un mensaje… (Enter para enviar)"></textarea>
+        <button class="btn" id="ch-mic" title="Hablar (dictar)" ${micOk ? '' : 'disabled'}>🎤</button>
+        <textarea id="ch-text" placeholder="Escribe o pulsa 🎤 para hablar… (Enter para enviar)"></textarea>
         <button class="btn primary" id="ch-send">Enviar</button>
       </div>
     </div>`;
   const log = $('#ch-log', view);
-  if (prov.provider === 'demo') {
-    add('bot', '⚠️ Modo demo: las respuestas son simuladas. Para hablarle gratis de verdad, configura Ollama (local) o un modelo :free de OpenRouter en .env (LLM_BASE_URL). Ver README.');
-  }
   function add(cls, text) { const m = el(`<div class="msg ${cls}"></div>`); m.textContent = text; log.appendChild(m); log.scrollTop = log.scrollHeight; return m; }
+
+  // ----- Text-to-speech (gratis) -----
+  let ttsOn = false;
+  const voiceSel = $('#ch-voice', view);
+  function loadVoices() {
+    if (!ttsOk) return;
+    const voices = speechSynthesis.getVoices();
+    const es = voices.filter((v) => /es(-|_)/i.test(v.lang));
+    const list = (es.length ? es : voices);
+    voiceSel.innerHTML = list.map((v) => `<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)})</option>`).join('') || '<option>—</option>';
+  }
+  if (ttsOk) {
+    loadVoices();
+    speechSynthesis.onvoiceschanged = loadVoices;
+  } else {
+    $('#ch-tts', view).disabled = true;
+    voiceSel.style.display = 'none';
+  }
+  function speak(text) {
+    if (!ttsOn || !ttsOk || !text.trim()) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = speechSynthesis.getVoices().find((x) => x.name === voiceSel.value);
+    if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = 'es-ES'; }
+    u.rate = 1; u.pitch = 1;
+    speechSynthesis.speak(u);
+  }
+  $('#ch-tts', view).addEventListener('click', () => {
+    ttsOn = !ttsOn;
+    $('#ch-tts', view).textContent = ttsOn ? '🔊 Voz: on' : '🔊 Voz: off';
+    $('#ch-tts', view).classList.toggle('primary', ttsOn);
+    if (!ttsOn) speechSynthesis.cancel();
+    else speak('Voz activada');
+  });
+
+  // ----- Micrófono / dictado (gratis) -----
+  if (micOk) {
+    let rec = null, listening = false;
+    $('#ch-mic', view).addEventListener('click', () => {
+      if (listening) { rec && rec.stop(); return; }
+      rec = new SR();
+      rec.lang = 'es-ES';
+      rec.interimResults = true;
+      rec.continuous = false;
+      listening = true;
+      $('#ch-mic', view).classList.add('primary');
+      $('#ch-mic', view).textContent = '⏺';
+      let finalText = '';
+      rec.onresult = (e) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const tr = e.results[i];
+          if (tr.isFinal) finalText += tr[0].transcript;
+          else interim += tr[0].transcript;
+        }
+        $('#ch-text', view).value = (finalText + interim).trim();
+      };
+      rec.onerror = () => toast('No se pudo usar el micrófono', 'err');
+      rec.onend = () => {
+        listening = false;
+        $('#ch-mic', view).classList.remove('primary');
+        $('#ch-mic', view).textContent = '🎤';
+      };
+      rec.start();
+    });
+  }
+
+  if (prov.provider === 'demo') {
+    add('bot', '⚠️ Modo demo: las respuestas son simuladas. Para respuestas reales gratis, configura un modelo :free de OpenRouter en .env (LLM_BASE_URL). La voz 🔊 y el micrófono 🎤 funcionan en cualquier modo (gratis, vía el navegador).');
+  }
 
   if (chatWs) { try { chatWs.close(); } catch {} }
   chatWs = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
   let cur = null;
+  let speakBuf = '';
   chatWs.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
-    if (m.type === 'start') cur = add('bot', '');
-    else if (m.type === 'chunk' && cur) { cur.textContent += m.text; log.scrollTop = log.scrollHeight; }
-    else if (m.type === 'done') cur = null;
-    else if (m.type === 'error') add('bot', '⚠️ ' + m.error);
+    if (m.type === 'start') { cur = add('bot', ''); speakBuf = ''; }
+    else if (m.type === 'chunk' && cur) { cur.textContent += m.text; speakBuf += m.text; log.scrollTop = log.scrollHeight; }
+    else if (m.type === 'done') { speak(speakBuf); cur = null; }
+    else if (m.type === 'error') { const t = '⚠️ ' + m.error; add('bot', t); }
   };
 
   function send() {

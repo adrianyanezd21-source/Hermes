@@ -17,7 +17,7 @@ Owns all backend modules. Consumed by the root `server.js`.
 - `auth.js` — bcrypt password gate + per-session CSRF (`requireAuth`, `requireCsrf`, `issueCsrf`). All mutating API methods stay behind both.
 - `routes.js` — `/api` router; mounts under auth + CSRF. File explorer must keep path-traversal protection (`safeResolve`).
 - `recommendations.js` — content shown on the Recommendations page; tagged `channel` vs `extra`.
-- `llm.js` — OpenAI-compatible streaming client (SSE). Powers the FREE chat options: Ollama (`http://localhost:11434/v1`) and OpenRouter `:free` models. Reads `llmBaseUrl`/`llmApiKey`/`llmModel` from config.
+- `llm.js` — OpenAI-compatible streaming client (SSE). Powers the FREE chat option: OpenRouter `:free` models. Reads `llmBaseUrl`/`llmApiKey`/`llmModel` from config.
 - `chat.js` — chat orchestrator. `resolveProvider()` picks (auto): explicit `CHAT_PROVIDER` > Hermes CLI > LLM (`llm.js`) > demo. `stream()` is the single entry used by the server WebSocket; `providerInfo()` backs `/api/chat/provider`.
 - Office endpoints in `routes.js` (`/office/agent-states`, `/office/kanban`, `/office/events`) are read-only and currently served from `demo.js` (`officeAgents`/`officeKanban`/`officeEvents`); replace with live Hermes data when available, keeping the same shapes.
 

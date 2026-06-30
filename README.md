@@ -67,19 +67,9 @@ El badge en la barra lateral indica el modo actual.
 ## 🆓 Hablarle gratis (sin pagar API)
 
 El panel decide el proveedor de chat automáticamente (`CHAT_PROVIDER=auto`):
-**Hermes CLI → LLM OpenAI-compatible → demo**. La pestaña **Chat** muestra un badge con el proveedor activo. Dos formas 100% gratis de hablarle:
+**Hermes CLI → LLM OpenAI-compatible → demo**. La pestaña **Chat** muestra un badge con el proveedor activo.
 
-### Opción A — Ollama (local, sin internet)
-```bash
-# 1. Instala Ollama: https://ollama.com
-ollama pull llama3.2
-# 2. En tu .env:
-LLM_BASE_URL=http://localhost:11434/v1
-LLM_API_KEY=ollama
-LLM_MODEL=llama3.2
-```
-
-### Opción B — OpenRouter (modelos ":free" en la nube)
+### OpenRouter (modelos ":free" en la nube)
 ```bash
 # 1. API key gratis en https://openrouter.ai/keys
 # 2. En tu .env:
@@ -89,6 +79,16 @@ LLM_MODEL=meta-llama/llama-3.3-70b-instruct:free
 ```
 
 Reinicia el panel y el chat hablará de verdad por streaming, gratis.
+
+### 🔊 Voz gratis (el asistente habla y tú le hablas)
+
+La pestaña **Chat** incluye voz **100% gratis** usando la Web Speech API del navegador
+(no requiere API key ni servicios de pago):
+
+- **🔊 Voz: on/off** — lee en voz alta las respuestas del asistente (TTS). Selector de voz (prioriza voces en español).
+- **🎤 Micrófono** — dicta tu mensaje por voz (reconocimiento de voz del navegador).
+
+Funciona en cualquier modo (demo, Hermes u OpenRouter). Mejor soporte en navegadores basados en Chromium.
 
 ---
 
@@ -106,9 +106,9 @@ Reinicia el panel y el chat hablará de verdad por streaming, gratis.
 | `HERMES_API_KEY` | — | Clave del endpoint anterior |
 | `HERMES_DEMO` | `false` | Fuerza el modo demo |
 | `CHAT_PROVIDER` | `auto` | Proveedor de chat: `auto`/`hermes`/`openai`/`demo` |
-| `LLM_BASE_URL` | — | Endpoint OpenAI-compatible (Ollama / OpenRouter) |
+| `LLM_BASE_URL` | — | Endpoint OpenAI-compatible (OpenRouter) |
 | `LLM_API_KEY` | — | Clave del proveedor LLM |
-| `LLM_MODEL` | `llama3.2` | Modelo a usar en el chat gratuito |
+| `LLM_MODEL` | `…llama-3.3-70b-instruct:free` | Modelo a usar en el chat gratuito |
 
 ---
 
@@ -126,7 +126,7 @@ src/
   routes.js             API REST (status, agents, gateway, skills, mcp, cron, files, usage, logs, recs)
   hermes.js             Integración con el CLI de Hermes (+ fallback demo)
   chat.js               Orquestador de chat (hermes / openai / demo)
-  llm.js                Cliente OpenAI-compatible en streaming (Ollama / OpenRouter)
+  llm.js                Cliente OpenAI-compatible en streaming (OpenRouter)
   demo.js               Datos de demostración realistas (incl. Office)
   store.js              Persistencia en JSON (cron, usage)
   recommendations.js    Consejos del canal + mejoras extra
