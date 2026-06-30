@@ -15,6 +15,7 @@ Panel web auto-alojado para controlar el agente **[Hermes](https://github.com/No
 | **Inicio** | Salud del sistema (CPU/RAM/uptime), estado del gateway, plataformas conectadas |
 | **Chat** | Conversación en tiempo real con streaming vía WebSocket, selector de perfil |
 | **Agentes** | Lista de perfiles, modelo, personalidad; iniciar / parar / reiniciar gateway |
+| **Office** | Oficina virtual **animada** (PixiJS): cada agente es un personaje en un suelo isométrico, con anillo de estado (inactivo/pensando/programando/ejecutando/bloqueado) + kanban y live feed |
 | **Skills** | Explorar, instalar y quitar skills (compatibles con agentskills.io) |
 | **Cron** | Crear, pausar y borrar tareas programadas (lenguaje natural o expresión cron) |
 | **MCP** | Plano de control de servidores MCP: iniciar / parar / reiniciar |
@@ -63,6 +64,34 @@ El badge en la barra lateral indica el modo actual.
 
 ---
 
+## 🆓 Hablarle gratis (sin pagar API)
+
+El panel decide el proveedor de chat automáticamente (`CHAT_PROVIDER=auto`):
+**Hermes CLI → LLM OpenAI-compatible → demo**. La pestaña **Chat** muestra un badge con el proveedor activo. Dos formas 100% gratis de hablarle:
+
+### Opción A — Ollama (local, sin internet)
+```bash
+# 1. Instala Ollama: https://ollama.com
+ollama pull llama3.2
+# 2. En tu .env:
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_API_KEY=ollama
+LLM_MODEL=llama3.2
+```
+
+### Opción B — OpenRouter (modelos ":free" en la nube)
+```bash
+# 1. API key gratis en https://openrouter.ai/keys
+# 2. En tu .env:
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_API_KEY=sk-or-tu-clave
+LLM_MODEL=meta-llama/llama-3.3-70b-instruct:free
+```
+
+Reinicia el panel y el chat hablará de verdad por streaming, gratis.
+
+---
+
 ## ⚙️ Configuración (`.env`)
 
 | Variable | Por defecto | Descripción |
@@ -76,6 +105,10 @@ El badge en la barra lateral indica el modo actual.
 | `HERMES_API_URL` | — | Endpoint OpenAI-compatible para chat |
 | `HERMES_API_KEY` | — | Clave del endpoint anterior |
 | `HERMES_DEMO` | `false` | Fuerza el modo demo |
+| `CHAT_PROVIDER` | `auto` | Proveedor de chat: `auto`/`hermes`/`openai`/`demo` |
+| `LLM_BASE_URL` | — | Endpoint OpenAI-compatible (Ollama / OpenRouter) |
+| `LLM_API_KEY` | — | Clave del proveedor LLM |
+| `LLM_MODEL` | `llama3.2` | Modelo a usar en el chat gratuito |
 
 ---
 
@@ -92,7 +125,9 @@ src/
   auth.js               Password gate (bcrypt) + CSRF
   routes.js             API REST (status, agents, gateway, skills, mcp, cron, files, usage, logs, recs)
   hermes.js             Integración con el CLI de Hermes (+ fallback demo)
-  demo.js               Datos de demostración realistas
+  chat.js               Orquestador de chat (hermes / openai / demo)
+  llm.js                Cliente OpenAI-compatible en streaming (Ollama / OpenRouter)
+  demo.js               Datos de demostración realistas (incl. Office)
   store.js              Persistencia en JSON (cron, usage)
   recommendations.js    Consejos del canal + mejoras extra
 data/                   Estado persistido (JSON)

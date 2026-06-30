@@ -175,10 +175,67 @@ export function chatStream(prompt, onChunk, onDone) {
   }, 25);
 }
 
+// ----------------------------------------------------------------
+//  Office / ZOO Swarm Monitor (visualización tipo "oficina")
+// ----------------------------------------------------------------
+const AGENT_STATES = ['idle', 'thinking', 'coding', 'running', 'blocked'];
+
+export function officeAgents() {
+  const base = [
+    { name: 'jorah', role: 'Investigación', color: 0x6c8cff },
+    { name: 'varys', role: 'Redes sociales', color: 0x41d6a0 },
+    { name: 'samwell', role: 'Documentación', color: 0xffb454 },
+    { name: 'davos', role: 'Soporte', color: 0xff6b6b },
+  ];
+  return base.map((a, i) => ({
+    ...a,
+    state: AGENT_STATES[(Math.floor(Date.now() / 5000) + i) % AGENT_STATES.length],
+    task: ['—', 'analizando fuentes', 'editando informe', 'ejecutando script', 'esperando aprobación'][(i + Math.floor(Date.now() / 5000)) % 5],
+    tokens: 12000 + Math.round(Math.random() * 80000),
+  }));
+}
+
+export function officeKanban(board = 'main') {
+  const cols = ['triage', 'todo', 'running', 'review', 'done'];
+  const titles = {
+    main: ['Resumen diario noticias', 'Refactor del gateway', 'Investigar competidor X', 'Generar imágenes campaña', 'Backup memoria', 'Responder DMs', 'Auditar skills', 'Informe semanal'],
+    dev: ['Fix bug WebSocket', 'Tests de auth', 'Migrar a SQLite', 'Optimizar polling'],
+    content: ['Guion vídeo', 'Hilo de X', 'Newsletter', 'Miniatura'],
+    trading: ['Análisis BTC', 'Alertas precio', 'Backtest', 'Resumen mercado'],
+  };
+  const agentsList = ['jorah', 'varys', 'samwell', 'davos'];
+  const list = titles[board] || titles.main;
+  const tasks = list.map((title, i) => ({
+    id: board + '-' + i,
+    title,
+    status: cols[i % cols.length],
+    agent: agentsList[i % agentsList.length],
+    priority: ['low', 'med', 'high'][i % 3],
+  }));
+  return { ok: true, board, tasks, links: [{ from: board + '-0', to: board + '-2' }] };
+}
+
+export function officeEvents() {
+  const out = [];
+  const agentsList = ['jorah', 'varys', 'samwell', 'davos'];
+  const now = Date.now();
+  for (let i = 0; i < 30; i++) {
+    out.push({
+      ts: new Date(now - i * 30000).toISOString(),
+      agent: agentsList[i % agentsList.length],
+      text: MSGS[Math.floor(Math.random() * MSGS.length)],
+    });
+  }
+  return { ok: true, events: out };
+}
+
 export default {
   version,
   agents,
   gatewayStatus,
+  officeAgents,
+  officeKanban,
+  officeEvents,
   gatewayControl,
   skills,
   skillAction,

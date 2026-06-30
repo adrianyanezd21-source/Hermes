@@ -7,6 +7,7 @@ import hermes from './hermes.js';
 import demo from './demo.js';
 import store from './store.js';
 import { recommendations } from './recommendations.js';
+import chat from './chat.js';
 import { requireAuth, requireCsrf } from './auth.js';
 
 export function apiRouter() {
@@ -177,6 +178,14 @@ export function apiRouter() {
 
   // -------- Recomendaciones --------
   api.get('/recommendations', (req, res) => res.json(recommendations));
+
+  // -------- Office / ZOO Swarm Monitor --------
+  api.get('/office/agent-states', (req, res) => res.json({ ok: true, agents: demo.officeAgents() }));
+  api.get('/office/kanban', (req, res) => res.json(demo.officeKanban((req.query.board || 'main').toString())));
+  api.get('/office/events', (req, res) => res.json(demo.officeEvents()));
+
+  // -------- Chat: proveedor activo --------
+  api.get('/chat/provider', async (req, res) => res.json(await chat.providerInfo()));
 
   return api;
 }

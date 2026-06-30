@@ -21,6 +21,12 @@ export const config = {
   apiUrl: process.env.HERMES_API_URL || '',
   apiKey: process.env.HERMES_API_KEY || '',
   forceDemo: String(process.env.HERMES_DEMO || 'false').toLowerCase() === 'true',
+  // Proveedor de chat: auto | hermes | openai | demo
+  chatProvider: process.env.CHAT_PROVIDER || 'auto',
+  // Endpoint OpenAI-compatible para el chat gratuito (Ollama / OpenRouter).
+  llmBaseUrl: process.env.LLM_BASE_URL || '',
+  llmApiKey: process.env.LLM_API_KEY || '',
+  llmModel: process.env.LLM_MODEL || 'llama3.2',
   dataDir: path.join(repoRoot, 'data'),
   publicDir: path.join(repoRoot, 'public'),
 };

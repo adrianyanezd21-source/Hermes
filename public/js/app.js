@@ -68,6 +68,7 @@ const PAGES = [
   { id: 'home', ic: '🏠', name: 'Inicio', render: renderHome },
   { id: 'chat', ic: '💬', name: 'Chat', render: renderChat },
   { id: 'agents', ic: '🤖', name: 'Agentes', render: renderAgents },
+  { id: 'office', ic: '🏢', name: 'Office', render: renderOffice },
   { id: 'skills', ic: '🧩', name: 'Skills', render: renderSkills },
   { id: 'cron', ic: '⏰', name: 'Cron', render: renderCron },
   { id: 'mcp', ic: '🔌', name: 'MCP', render: renderMcp },
@@ -94,6 +95,7 @@ async function router() {
   const page = PAGES.find((p) => p.id === id) || PAGES[0];
   setActive(page.id);
   const view = $('#view');
+  teardownTransient();
   view.innerHTML = '<div class="loading">Cargando…</div>';
   try { await page.render(view); }
   catch (err) { view.innerHTML = `<div class="card"><p class="muted">No se pudo cargar: ${esc(err.message)}</p></div>`; }
@@ -362,10 +364,14 @@ async function renderFiles(view) {
 
 let chatWs = null;
 async function renderChat(view) {
-  const agents = await api('/agents').catch(() => []);
+  const [agents, prov] = await Promise.all([
+    api('/agents').catch(() => []),
+    api('/chat/provider').catch(() => ({ label: 'Demo', free: true })),
+  ]);
   const opts = agents.map((a) => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('');
+  const provBadge = `<span class="badge ${prov.free ? 'ok' : ''}" title="Proveedor de chat activo">${prov.free ? '🆓 ' : ''}${esc(prov.label || prov.provider)}</span>`;
   view.innerHTML = head('Chat', 'Conversa con Hermes en tiempo real',
-    `<select id="ch-profile">${opts || '<option>default</option>'}</select>`) + `
+    `${provBadge}<select id="ch-profile">${opts || '<option>default</option>'}</select>`) + `
     <div class="chat-wrap">
       <div class="chat-log" id="ch-log"></div>
       <div class="chat-input">
@@ -374,6 +380,9 @@ async function renderChat(view) {
       </div>
     </div>`;
   const log = $('#ch-log', view);
+  if (prov.provider === 'demo') {
+    add('bot', '⚠️ Modo demo: las respuestas son simuladas. Para hablarle gratis de verdad, configura Ollama (local) o un modelo :free de OpenRouter en .env (LLM_BASE_URL). Ver README.');
+  }
   function add(cls, text) { const m = el(`<div class="msg ${cls}"></div>`); m.textContent = text; log.appendChild(m); log.scrollTop = log.scrollHeight; return m; }
 
   if (chatWs) { try { chatWs.close(); } catch {} }
@@ -397,6 +406,149 @@ async function renderChat(view) {
   }
   $('#ch-send', view).addEventListener('click', send);
   $('#ch-text', view).addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+}
+
+// ---------- Office (PixiJS isometric animated office) ----------
+let officeApp = null;
+let officeTimer = null;
+let officeAgentSprites = {};
+
+function teardownTransient() {
+  if (officeTimer) { clearInterval(officeTimer); officeTimer = null; }
+  if (officeApp) { try { officeApp.destroy(true, { children: true }); } catch {} officeApp = null; }
+  officeAgentSprites = {};
+}
+
+const STATE_META = {
+  idle: { color: 0x8b97ad, emoji: '💤', label: 'Inactivo' },
+  thinking: { color: 0xffb454, emoji: '💭', label: 'Pensando' },
+  coding: { color: 0x41d6a0, emoji: '💻', label: 'Programando' },
+  running: { color: 0x6c8cff, emoji: '🟢', label: 'Ejecutando' },
+  blocked: { color: 0xff6b6b, emoji: '⚠️', label: 'Bloqueado' },
+};
+
+async function renderOffice(view) {
+  view.innerHTML = head('Office', 'Oficina virtual animada de tus agentes (ZOO Swarm Monitor)') + `
+    <div class="grid" style="grid-template-columns: 1fr 320px; gap:16px; align-items:start">
+      <div class="card" style="padding:0; overflow:hidden">
+        <div id="office-floor" style="width:100%; height:440px; background:#0a0e18"></div>
+      </div>
+      <div class="card"><h3>Agentes</h3><div id="office-agents"></div></div>
+    </div>
+    <div class="grid cols-2" style="margin-top:16px">
+      <div class="card"><h3>📋 Pipeline (kanban)</h3><div id="office-kanban"></div></div>
+      <div class="card"><h3>📡 Live Feed</h3><div class="console" id="office-feed" style="max-height:240px"></div></div>
+    </div>`;
+
+  if (!window.PIXI) { $('#office-floor', view).innerHTML = '<div class="loading">No se pudo cargar PixiJS</div>'; }
+
+  const floor = $('#office-floor', view);
+  const W = floor.clientWidth || 800, H = 440;
+
+  officeApp = new PIXI.Application();
+  await officeApp.init({ width: W, height: H, background: 0x0a0e18, antialias: true });
+  floor.appendChild(officeApp.canvas);
+
+  // --- Isometric floor ---
+  const TILE_W = 92, TILE_H = 46, COLS = 5, ROWS = 4;
+  const originX = W / 2, originY = 70;
+  const toIso = (c, r) => ({ x: originX + (c - r) * (TILE_W / 2), y: originY + (c + r) * (TILE_H / 2) });
+
+  const floorG = new PIXI.Graphics();
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const p = toIso(c, r);
+      floorG.moveTo(p.x, p.y)
+        .lineTo(p.x + TILE_W / 2, p.y + TILE_H / 2)
+        .lineTo(p.x, p.y + TILE_H)
+        .lineTo(p.x - TILE_W / 2, p.y + TILE_H / 2)
+        .lineTo(p.x, p.y)
+        .fill({ color: (c + r) % 2 ? 0x131a29 : 0x172033 })
+        .stroke({ color: 0x243049, width: 1 });
+    }
+  }
+  officeApp.stage.addChild(floorG);
+
+  // --- Desks (one per agent slot) ---
+  const deskSlots = [{ c: 1, r: 0 }, { c: 3, r: 0 }, { c: 1, r: 2 }, { c: 3, r: 2 }];
+  deskSlots.forEach((s) => {
+    const p = toIso(s.c, s.r);
+    const desk = new PIXI.Graphics();
+    desk.rect(p.x - 26, p.y + 6, 52, 22).fill({ color: 0x2a3550 }).stroke({ color: 0x3a4a6b, width: 1 });
+    officeApp.stage.addChild(desk);
+  });
+
+  // --- Agent characters ---
+  function makeAgent(a, slot) {
+    const cont = new PIXI.Container();
+    const body = new PIXI.Graphics();
+    body.circle(0, 0, 13).fill({ color: a.color || 0x6c8cff });
+    body.circle(0, -3, 5).fill({ color: 0xffffff, alpha: 0.85 });
+    const ring = new PIXI.Graphics();
+    ring.circle(0, 0, 17).stroke({ color: STATE_META[a.state]?.color || 0x8b97ad, width: 3 });
+    const label = new PIXI.Text({ text: a.name, style: { fontSize: 11, fill: 0xe6ebf5, fontFamily: 'monospace' } });
+    label.anchor.set(0.5); label.y = 26;
+    const emoji = new PIXI.Text({ text: STATE_META[a.state]?.emoji || '', style: { fontSize: 14 } });
+    emoji.anchor.set(0.5); emoji.y = -24;
+    cont.addChild(ring, body, emoji, label);
+    const p = toIso(slot.c, slot.r);
+    cont.x = p.x; cont.y = p.y - 6;
+    cont._home = { x: p.x, y: p.y - 6 };
+    cont._ring = ring; cont._emoji = emoji;
+    officeApp.stage.addChild(cont);
+    return cont;
+  }
+
+  // bob animation
+  let tick = 0;
+  officeApp.ticker.add(() => {
+    tick += 0.05;
+    Object.values(officeAgentSprites).forEach((s, i) => {
+      s.y = s._home.y + Math.sin(tick + i) * 3;
+    });
+  });
+
+  async function refresh() {
+    let data;
+    try { data = await api('/office/agent-states'); } catch { return; }
+    const agents = data.agents || [];
+    // floor sprites
+    agents.forEach((a, i) => {
+      const slot = deskSlots[i % deskSlots.length];
+      if (!officeAgentSprites[a.name]) officeAgentSprites[a.name] = makeAgent(a, slot);
+      const sp = officeAgentSprites[a.name];
+      sp._ring.clear().circle(0, 0, 17).stroke({ color: STATE_META[a.state]?.color || 0x8b97ad, width: 3 });
+      sp._emoji.text = STATE_META[a.state]?.emoji || '';
+    });
+    // side list
+    $('#office-agents', view).innerHTML = agents.map((a) => {
+      const m = STATE_META[a.state] || {};
+      return `<div class="row" style="justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line)">
+        <div><strong>${esc(a.name)}</strong><div class="muted" style="font-size:12px">${esc(a.role || '')}</div></div>
+        <div style="text-align:right"><span class="badge">${m.emoji || ''} ${esc(m.label || a.state)}</span><div class="muted" style="font-size:11px">${esc(a.task || '')}</div></div>
+      </div>`;
+    }).join('');
+
+    // kanban + feed
+    try {
+      const kb = await api('/office/kanban?board=main');
+      const cols = ['triage', 'todo', 'running', 'review', 'done'];
+      const names = { triage: '🔍 Triage', todo: '📋 Todo', running: '🔄 Activo', review: '👁️ Review', done: '✅ Hecho' };
+      $('#office-kanban', view).innerHTML = `<div class="row" style="align-items:flex-start; gap:8px">` + cols.map((c) => {
+        const items = (kb.tasks || []).filter((t) => t.status === c);
+        return `<div style="flex:1; min-width:0"><div class="muted" style="font-size:11px; margin-bottom:6px">${names[c]} (${items.length})</div>` +
+          items.map((t) => `<div class="badge" style="display:block; margin-bottom:6px; white-space:normal; text-align:left">${esc(t.title)}<br><span class="muted">@${esc(t.agent)}</span></div>`).join('') + `</div>`;
+      }).join('') + `</div>`;
+    } catch {}
+    try {
+      const ev = await api('/office/events');
+      $('#office-feed', view).innerHTML = (ev.events || []).map((e) =>
+        `<div><span class="muted">${new Date(e.ts).toLocaleTimeString('es')}</span> <span class="lg-INFO">@${esc(e.agent)}</span> ${esc(e.text)}</div>`).join('');
+    } catch {}
+  }
+
+  await refresh();
+  officeTimer = setInterval(refresh, 4000);
 }
 
 async function renderRecs(view) {

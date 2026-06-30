@@ -5,6 +5,7 @@ import { WebSocketServer } from 'ws';
 import config from './src/config.js';
 import { checkPassword, issueCsrf } from './src/auth.js';
 import hermes from './src/hermes.js';
+import chat from './src/chat.js';
 import { apiRouter } from './src/routes.js';
 
 const app = express();
@@ -33,10 +34,11 @@ app.use((req, res, next) => {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' https://cdn.jsdelivr.net",
+      "script-src 'self' https://cdn.jsdelivr.net blob:",
       "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-      "img-src 'self' data:",
+      "img-src 'self' data: blob:",
       "connect-src 'self' ws: wss:",
+      "worker-src 'self' blob:",
       "font-src 'self' https://cdn.jsdelivr.net",
     ].join('; ')
   );
@@ -101,13 +103,11 @@ wss.on('connection', (ws) => {
     }
     if (msg.type === 'chat' && msg.prompt) {
       ws.send(JSON.stringify({ type: 'start' }));
-      hermes.chatStream(
-        msg.prompt,
-        msg.profile,
-        (chunk) => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'chunk', text: chunk })),
-        () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'done' })),
-        (err) => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'error', error: err.message }))
-      );
+      chat.stream(msg.prompt, msg.profile, {
+        onChunk: (chunk) => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'chunk', text: chunk })),
+        onDone: () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'done' })),
+        onError: (err) => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'error', error: err.message })),
+      });
     }
   });
 });
