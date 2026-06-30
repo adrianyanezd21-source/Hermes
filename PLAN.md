@@ -254,3 +254,45 @@ Mejoras recomendadas para Hermes (más allá del panel):
 
 Siguiente paso sugerido: **Fase 1** (leer `config.yaml` real + mapear comandos del CLI),
 porque desbloquea datos reales en casi todas las páginas.
+
+
+---
+
+## 12. Síntesis del mejor agente personal/código (HCI + OpenClaw + OpenCode + Claude Code)
+
+Además del panel del video (HCI), se incorporan las mejores ideas de tres agentes open source:
+
+### OpenClaw (asistente personal) — `github.com/openclaw/openclaw`
+- **Comandos de chat** (`/status`, `/new`, `/reset`, `/compact`, `/think <nivel>`, `/verbose`) → implementados en el Chat como **slash commands** (`/help`, `/clear`, `/new`, `/plan`, `/think`, `/status`, `/model`). ✅
+- **Multi-agente / multi-canal**: enrutar canales a agentes aislados (workspaces + sesiones por agente) → reflejado en Agentes + detalle por perfil (sesiones/memoria/config). 🟡
+- **Voice Wake / Talk Mode** → voz gratis del navegador (TTS + micrófono) ya integrada. ✅
+- **Sandbox de herramientas** (allow/deny por sesión) → modelo de permisos RBAC del panel. 🟡
+- **Pairing/seguridad de DMs** (tratar la entrada como no confiable) → idea para el endurecimiento del gateway. ⬜
+
+### OpenCode (agente de código en terminal) — `opencode.ai`
+- **Plan-then-Build**: proponer plan y revisar diffs antes de tocar ficheros → **modo Plan** en el Chat (prepende la directiva de plan). ✅ (revisión de diffs ⬜)
+- **75+ proveedores con un solo config** → capa LLM OpenAI-compatible configurable (`LLM_BASE_URL`). 🟡
+- **Modelos gratis incluidos** → OpenRouter `:free` documentado. ✅
+- **Terminal-first + shell** → página Terminal con ejecución real de comandos. ✅
+- **Diagnósticos LSP** → pendiente (requiere servidores LSP). ⬜
+
+### Claude Code (agente de código) — Anthropic
+- **Slash commands + plan mode + thinking levels** → integrados (Plan + 🧠 bajo/medio/alto). ✅
+- **Memoria del proyecto (CLAUDE.md/AGENTS.md)** → DOX instalado (AGENTS.md jerárquico) + memoria por agente editable. ✅
+- **Checkpoints / rollback** → checkpoints nativos de Hermes (documentado en Recomendaciones). 🟡
+- **Subagentes / delegación** → `delegate_task` de Hermes (documentado). 🟡
+- **Permisos / allowlist de herramientas** → RBAC (20 permisos, 3 roles, aislamiento por perfil). ✅
+
+> Atribución: OpenClaw (MIT), OpenCode (MIT) y Claude Code son de sus respectivos autores.
+> Aquí se reimplementan ideas/patrones de forma propia, no su código. (Contenido reformulado
+> para cumplir con licencias.)
+
+## 13. Estado actualizado (esta entrega)
+
+Completado además de la Fase 0: **RBAC + Usuarios**, **detalle de agente** (sesiones/memoria/config),
+**Office** con kanban de 8 carriles + detalle de tarea, **Monitor** (métricas+procesos),
+**Terminal** (ejecución real), **Maintenance** (backup/restore/doctor/update), **Workspace**,
+**Ajustes**, y **Chat avanzado** (slash commands, modo Plan, nivel de pensamiento, Stop, voz).
+
+Pendiente real: integración LIVE con Hermes (config.yaml/CLI), SQLite para kanban, LSP, PWA,
+i18n, tests Playwright, terminal con pty persistente y revisión de diffs.

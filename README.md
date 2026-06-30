@@ -2,7 +2,7 @@
 
 Panel web auto-alojado para controlar el agente **[Hermes](https://github.com/NousResearch/hermes-agent)** de Nous Research desde el navegador: chat en tiempo real, agentes, gateway, skills, cron, MCP, archivos, uso de tokens, logs y una sección de **recomendaciones** para mejorar tu agente.
 
-> Inspirado en el vídeo **["This OpenSource Repo will 10X Your Hermes Agent"](https://www.youtube.com/watch?v=yOZVYw9FIWc)** de **Jack Roberts** (`@Itssssss_Jack`), que presenta el _Hermes Control Interface_. Este panel reimplementa esas ideas con una base ligera y añade recomendaciones extra basadas en la documentación oficial de Hermes.
+> Inspirado en el vídeo **["This OpenSource Repo will 10X Your Hermes Agent"](https://www.youtube.com/watch?v=yOZVYw9FIWc)** de **Jack Roberts** (`@Itssssss_Jack`), que presenta el _Hermes Control Interface_. Este panel reimplementa esas ideas con una base ligera y añade lo mejor de **OpenClaw** (comandos de chat, voz, multi-agente), **OpenCode** (modo Plan-then-Build, terminal, multi-proveedor) y **Claude Code** (slash commands, niveles de pensamiento, permisos, memoria de proyecto), más recomendaciones de la documentación oficial de Hermes.
 
 **Stack:** Node.js · Express · WebSocket (`ws`) · Vanilla JS · Chart.js — sin dependencias nativas.
 
@@ -15,7 +15,13 @@ Panel web auto-alojado para controlar el agente **[Hermes](https://github.com/No
 | **Inicio** | Salud del sistema (CPU/RAM/uptime), estado del gateway, plataformas conectadas |
 | **Chat** | Conversación en tiempo real con streaming vía WebSocket, selector de perfil |
 | **Agentes** | Lista de perfiles, modelo, personalidad; iniciar / parar / reiniciar gateway |
-| **Office** | Oficina virtual **animada** (PixiJS): cada agente es un personaje en un suelo isométrico, con anillo de estado (inactivo/pensando/programando/ejecutando/bloqueado) + kanban y live feed |
+| **Agentes** | Lista de perfiles + detalle por agente (sesiones, memoria editable, config YAML) |
+| **Office** | Oficina virtual **animada** (PixiJS): cada agente es un personaje en un suelo isométrico, con anillo de estado (inactivo/pensando/programando/ejecutando/bloqueado) + kanban de 8 carriles y live feed |
+| **Workspace** | Explora un proyecto y manda instrucciones al chat con ese contexto |
+| **Terminal** | Ejecuta comandos reales del servidor (detrás de permiso) |
+| **Monitor** | Métricas CPU/RAM en vivo y lista de procesos |
+| **Mantenimiento** | Backup/restore, system doctor y actualización |
+| **Usuarios** | RBAC: roles (admin/viewer/custom), 20 permisos, aislamiento por perfil |
 | **Skills** | Explorar, instalar y quitar skills (compatibles con agentskills.io) |
 | **Cron** | Crear, pausar y borrar tareas programadas (lenguaje natural o expresión cron) |
 | **MCP** | Plano de control de servidores MCP: iniciar / parar / reiniciar |

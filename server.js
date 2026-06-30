@@ -3,7 +3,8 @@ import session from 'express-session';
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
 import config from './src/config.js';
-import { checkPassword, issueCsrf } from './src/auth.js';
+import { authenticate, issueCsrf, getUser } from './src/auth.js';
+import users from './src/users.js';
 import hermes from './src/hermes.js';
 import chat from './src/chat.js';
 import { apiRouter } from './src/routes.js';
@@ -47,22 +48,29 @@ app.use((req, res, next) => {
 
 // -------- Autenticación --------
 app.post('/auth/login', (req, res) => {
-  const { password } = req.body || {};
-  if (!checkPassword(password)) {
-    return res.status(401).json({ error: 'contraseña incorrecta' });
+  const { username, password } = req.body || {};
+  const user = authenticate(username, password);
+  if (!user) {
+    return res.status(401).json({ error: 'usuario o contraseña incorrectos' });
   }
   req.session.authed = true;
+  req.session.userId = user.id;
   const csrf = issueCsrf(req);
-  res.json({ ok: true, csrf });
+  res.json({ ok: true, csrf, user: publicUser(user) });
 });
 
 app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
 });
 
+function publicUser(u) {
+  return { id: u.id, username: u.username, role: u.role, permissions: users.effectivePerms(u), allowed_profiles: u.allowed_profiles || ['*'] };
+}
+
 app.get('/auth/me', (req, res) => {
-  if (req.session?.authed) {
-    return res.json({ authed: true, csrf: issueCsrf(req) });
+  if (req.session?.authed && req.session?.userId) {
+    const u = getUser(req);
+    if (u) return res.json({ authed: true, csrf: issueCsrf(req), user: publicUser(u) });
   }
   res.json({ authed: false });
 });

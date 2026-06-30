@@ -1,7 +1,14 @@
 // Hermes Control Panel — SPA (vanilla JS)
 'use strict';
 
-const state = { csrf: null, charts: {} };
+const state = { csrf: null, charts: {}, user: null };
+
+function can(perm) {
+  const u = state.user;
+  if (!u) return false;
+  if (u.role === 'admin') return true;
+  return (u.permissions || []).includes(perm);
+}
 
 // ---------- helpers ----------
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -43,18 +50,19 @@ function showApp() { $('#login').classList.add('hidden'); $('#app').classList.re
 
 async function initAuth() {
   const me = await fetch('/auth/me').then((r) => r.json());
-  if (me.authed) { state.csrf = me.csrf; startApp(); }
+  if (me.authed) { state.csrf = me.csrf; state.user = me.user; startApp(); }
   else showLogin();
 }
 
 $('#login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const username = $('#login-user').value.trim() || 'admin';
   const password = $('#login-pass').value;
   const res = await fetch('/auth/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }),
   });
   const data = await res.json();
-  if (res.ok) { state.csrf = data.csrf; $('#login-pass').value = ''; $('#login-error').textContent = ''; startApp(); }
+  if (res.ok) { state.csrf = data.csrf; state.user = data.user; $('#login-pass').value = ''; $('#login-error').textContent = ''; startApp(); }
   else $('#login-error').textContent = data.error || 'Error';
 });
 
@@ -65,25 +73,43 @@ $('#logout').addEventListener('click', async () => {
 
 // ---------- navigation ----------
 const PAGES = [
-  { id: 'home', ic: '🏠', name: 'Inicio', render: renderHome },
-  { id: 'chat', ic: '💬', name: 'Chat', render: renderChat },
-  { id: 'agents', ic: '🤖', name: 'Agentes', render: renderAgents },
-  { id: 'office', ic: '🏢', name: 'Office', render: renderOffice },
-  { id: 'skills', ic: '🧩', name: 'Skills', render: renderSkills },
-  { id: 'cron', ic: '⏰', name: 'Cron', render: renderCron },
-  { id: 'mcp', ic: '🔌', name: 'MCP', render: renderMcp },
-  { id: 'files', ic: '📁', name: 'Archivos', render: renderFiles },
-  { id: 'usage', ic: '📊', name: 'Uso', render: renderUsage },
-  { id: 'logs', ic: '📜', name: 'Logs', render: renderLogs },
-  { id: 'recommendations', ic: '💡', name: 'Recomendaciones', render: renderRecs },
+  { id: 'home', ic: '🏠', name: 'Inicio', perm: 'view_home', render: renderHome },
+  { id: 'chat', ic: '💬', name: 'Chat', perm: 'view_chat', render: renderChat },
+  { id: 'agents', ic: '🤖', name: 'Agentes', perm: 'view_agents', render: renderAgents },
+  { id: 'agent', ic: '🤖', name: 'Agente', perm: 'view_agents', hidden: true, render: renderAgentDetail },
+  { id: 'office', ic: '🏢', name: 'Office', perm: 'view_office', render: renderOffice },
+  { id: 'workspace', ic: '🗂️', name: 'Workspace', perm: 'view_files', render: renderWorkspace },
+  { id: 'skills', ic: '🧩', name: 'Skills', perm: 'view_skills', render: renderSkills },
+  { id: 'cron', ic: '⏰', name: 'Cron', perm: 'view_cron', render: renderCron },
+  { id: 'mcp', ic: '🔌', name: 'MCP', perm: 'view_mcp', render: renderMcp },
+  { id: 'files', ic: '📁', name: 'Archivos', perm: 'view_files', render: renderFiles },
+  { id: 'terminal', ic: '🖥️', name: 'Terminal', perm: 'use_terminal', render: renderTerminal },
+  { id: 'monitor', ic: '📈', name: 'Monitor', perm: 'view_monitor', render: renderMonitor },
+  { id: 'usage', ic: '📊', name: 'Uso', perm: 'view_usage', render: renderUsage },
+  { id: 'logs', ic: '📜', name: 'Logs', perm: 'view_logs', render: renderLogs },
+  { id: 'maintenance', ic: '🛠️', name: 'Mantenimiento', perm: 'manage_maintenance', render: renderMaintenance },
+  { id: 'users', ic: '👥', name: 'Usuarios', perm: 'manage_users', render: renderUsers },
+  { id: 'recommendations', ic: '💡', name: 'Recomendaciones', perm: 'view_home', render: renderRecs },
+  { id: 'settings', ic: '⚙️', name: 'Ajustes', perm: 'view_home', render: renderSettings },
 ];
+
+function visiblePages() {
+  return PAGES.filter((p) => !p.hidden && can(p.perm));
+}
 
 function buildNav() {
   const nav = $('#nav'); nav.innerHTML = '';
-  PAGES.forEach((p) => {
+  visiblePages().forEach((p) => {
     const a = el(`<a class="nav-item" href="#${p.id}"><span class="ic">${p.ic}</span><span>${p.name}</span></a>`);
     nav.appendChild(a);
   });
+  // usuario en el pie
+  const foot = $('.sidebar-foot');
+  let u = $('#who', foot);
+  if (!u && state.user) {
+    u = el(`<span id="who" class="muted" style="font-size:11px; margin-right:auto">👤 ${esc(state.user.username)} <span class="badge">${esc(state.user.role)}</span></span>`);
+    foot.insertBefore(u, foot.firstChild);
+  }
 }
 
 function setActive(id) {
@@ -91,13 +117,18 @@ function setActive(id) {
 }
 
 async function router() {
-  const id = (location.hash.slice(1) || 'home');
+  const raw = (location.hash.slice(1) || 'home');
+  const [id, arg] = raw.split('/');
   const page = PAGES.find((p) => p.id === id) || PAGES[0];
+  if (page.perm && !can(page.perm)) {
+    $('#view').innerHTML = `<div class="card"><h3>Acceso denegado</h3><p class="muted">No tienes permiso para ver esta sección.</p></div>`;
+    return;
+  }
   setActive(page.id);
   const view = $('#view');
   teardownTransient();
   view.innerHTML = '<div class="loading">Cargando…</div>';
-  try { await page.render(view); }
+  try { await page.render(view, arg); }
   catch (err) { view.innerHTML = `<div class="card"><p class="muted">No se pudo cargar: ${esc(err.message)}</p></div>`; }
 }
 
@@ -376,21 +407,39 @@ async function renderChat(view) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const micOk = !!SR;
 
-  view.innerHTML = head('Chat', 'Conversa con Hermes en tiempo real (voz gratis del navegador)',
+  view.innerHTML = head('Chat', 'Agente de IA: voz gratis, comandos slash, modo Plan y nivel de pensamiento',
     `${provBadge}
+     <button class="btn sm" id="ch-plan" title="Modo Plan: propone un plan antes de actuar">📋 Plan: off</button>
+     <select id="ch-think" title="Nivel de pensamiento"><option value="">🧠 normal</option><option value="low">🧠 bajo</option><option value="medium">🧠 medio</option><option value="high">🧠 alto</option></select>
      <button class="btn sm" id="ch-tts" title="Leer respuestas en voz alta">🔊 Voz: off</button>
-     <select id="ch-voice" title="Voz" style="max-width:160px"></select>
-     <select id="ch-profile">${opts || '<option>default</option>'}</select>`) + `
+     <select id="ch-voice" title="Voz" style="max-width:150px"></select>
+     <select id="ch-profile">${opts || '<option>default</option>'}</select>
+     <button class="btn sm" id="ch-new" title="Nueva sesión">✨ Nueva</button>`) + `
     <div class="chat-wrap">
       <div class="chat-log" id="ch-log"></div>
       <div class="chat-input">
         <button class="btn" id="ch-mic" title="Hablar (dictar)" ${micOk ? '' : 'disabled'}>🎤</button>
-        <textarea id="ch-text" placeholder="Escribe o pulsa 🎤 para hablar… (Enter para enviar)"></textarea>
+        <textarea id="ch-text" placeholder="Escribe, pulsa 🎤, o usa /help para ver comandos… (Enter para enviar)"></textarea>
         <button class="btn primary" id="ch-send">Enviar</button>
+        <button class="btn danger" id="ch-stop" title="Detener" style="display:none">⏹</button>
       </div>
     </div>`;
   const log = $('#ch-log', view);
   function add(cls, text) { const m = el(`<div class="msg ${cls}"></div>`); m.textContent = text; log.appendChild(m); log.scrollTop = log.scrollHeight; return m; }
+
+  // Modo Plan + nivel de pensamiento (inspirado en OpenCode / Claude Code)
+  let planMode = false;
+  $('#ch-plan', view).addEventListener('click', () => {
+    planMode = !planMode;
+    $('#ch-plan', view).textContent = planMode ? '📋 Plan: on' : '📋 Plan: off';
+    $('#ch-plan', view).classList.toggle('primary', planMode);
+  });
+  $('#ch-new', view).addEventListener('click', () => { log.innerHTML = ''; add('bot', '✨ Nueva sesión. Escribe /help para ver los comandos.'); });
+
+  const COMMANDS = {
+    '/help': 'Comandos: /help, /clear, /new, /plan on|off, /think low|medium|high, /status, /model. El resto se envía al agente.',
+    '/clear': '__clear__', '/new': '__clear__',
+  };
 
   // ----- Text-to-speech (gratis) -----
   let ttsOn = false;
@@ -466,24 +515,57 @@ async function renderChat(view) {
   chatWs = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
   let cur = null;
   let speakBuf = '';
+  function setBusy(b) { $('#ch-send', view).style.display = b ? 'none' : ''; $('#ch-stop', view).style.display = b ? '' : 'none'; }
   chatWs.onmessage = (ev) => {
     const m = JSON.parse(ev.data);
-    if (m.type === 'start') { cur = add('bot', ''); speakBuf = ''; }
+    if (m.type === 'start') { cur = add('bot', ''); speakBuf = ''; setBusy(true); }
     else if (m.type === 'chunk' && cur) { cur.textContent += m.text; speakBuf += m.text; log.scrollTop = log.scrollHeight; }
-    else if (m.type === 'done') { speak(speakBuf); cur = null; }
-    else if (m.type === 'error') { const t = '⚠️ ' + m.error; add('bot', t); }
+    else if (m.type === 'done') { speak(speakBuf); cur = null; setBusy(false); }
+    else if (m.type === 'error') { add('bot', '⚠️ ' + m.error); setBusy(false); }
   };
+  $('#ch-stop', view).addEventListener('click', () => {
+    if (ttsOk) speechSynthesis.cancel();
+    setBusy(false);
+    if (cur) { cur.textContent += ' …(detenido)'; cur = null; }
+  });
+
+  function handleCommand(text) {
+    const [cmd, ...rest] = text.split(/\s+/);
+    const arg = rest.join(' ').trim();
+    switch (cmd) {
+      case '/help': add('bot', COMMANDS['/help']); return true;
+      case '/clear': case '/new': log.innerHTML = ''; add('bot', '✨ Sesión limpiada.'); return true;
+      case '/plan': planMode = (arg === 'on'); $('#ch-plan', view).textContent = planMode ? '📋 Plan: on' : '📋 Plan: off'; $('#ch-plan', view).classList.toggle('primary', planMode); add('bot', 'Modo Plan: ' + (planMode ? 'activado' : 'desactivado')); return true;
+      case '/think': { const sel = $('#ch-think', view); if (['low', 'medium', 'high', ''].includes(arg)) { sel.value = arg; add('bot', 'Nivel de pensamiento: ' + (arg || 'normal')); } else add('bot', 'Uso: /think low|medium|high'); return true; }
+      case '/status': add('bot', `Proveedor: ${prov.label || prov.provider} · Modelo: ${prov.model || '—'} · Plan: ${planMode ? 'on' : 'off'} · Pensamiento: ${$('#ch-think', view).value || 'normal'}`); return true;
+      case '/model': add('bot', `Modelo actual: ${prov.model || '—'}. Cámbialo en .env (LLM_MODEL) y reinicia.`); return true;
+      default: return false;
+    }
+  }
 
   function send() {
-    const text = $('#ch-text', view).value.trim();
-    if (!text) return;
-    add('user', text);
+    const raw = $('#ch-text', view).value.trim();
+    if (!raw) return;
+    add('user', raw);
     $('#ch-text', view).value = '';
-    if (chatWs.readyState === 1) chatWs.send(JSON.stringify({ type: 'chat', prompt: text, profile: $('#ch-profile', view).value }));
+    if (raw.startsWith('/') && handleCommand(raw)) return;
+    // Construir el prompt efectivo con directivas de Plan / pensamiento.
+    let prompt = raw;
+    const think = $('#ch-think', view).value;
+    const directives = [];
+    if (planMode) directives.push('Primero propón un PLAN numerado de los pasos antes de ejecutar nada; espera confirmación.');
+    if (think === 'high') directives.push('Razona en profundidad antes de responder.');
+    else if (think === 'medium') directives.push('Razona los puntos clave antes de responder.');
+    if (directives.length) prompt = directives.join(' ') + '\n\n' + raw;
+    if (chatWs.readyState === 1) chatWs.send(JSON.stringify({ type: 'chat', prompt, profile: $('#ch-profile', view).value }));
     else add('bot', '⚠️ conexión no disponible');
   }
   $('#ch-send', view).addEventListener('click', send);
   $('#ch-text', view).addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+
+  // Handoff desde Workspace
+  const handoff = sessionStorage.getItem('ws-handoff');
+  if (handoff) { sessionStorage.removeItem('ws-handoff'); $('#ch-text', view).value = handoff; }
 }
 
 // ---------- Office (PixiJS isometric animated office) ----------
@@ -492,6 +574,7 @@ let officeTimer = null;
 let officeAgentSprites = {};
 
 function teardownTransient() {
+  if (window.__pageTimer) { clearInterval(window.__pageTimer); window.__pageTimer = null; }
   if (officeTimer) { clearInterval(officeTimer); officeTimer = null; }
   if (officeApp) { try { officeApp.destroy(true, { children: true }); } catch {} officeApp = null; }
   officeAgentSprites = {};
@@ -643,6 +726,212 @@ async function renderRecs(view) {
       <p>Basado en el vídeo <strong>“${esc(c.title)}”</strong> de <strong>${esc(c.author)}</strong> (${esc(c.handle)}) — <a href="${esc(c.url)}" target="_blank" rel="noopener">ver en YouTube</a> — ampliado con mejoras de la documentación oficial de Hermes.</p>
     </div>
     <div class="grid cols-2">${groups}</div>`;
+}
+
+// ---------- Agente (detalle) ----------
+async function renderAgentDetail(view, profile) {
+  if (!profile) { location.hash = '#agents'; return; }
+  const [sessions, mem, cfg] = await Promise.all([
+    api('/agents/' + encodeURIComponent(profile) + '/sessions').catch(() => []),
+    api('/agents/' + encodeURIComponent(profile) + '/memory').catch(() => ({ files: {} })),
+    api('/agents/' + encodeURIComponent(profile) + '/config').catch(() => ({ yaml: '' })),
+  ]);
+  const memFiles = Object.keys(mem.files || {});
+  view.innerHTML = head('Agente: ' + esc(profile), 'Sesiones, memoria y configuración',
+    `<a class="btn" href="#agents">← Agentes</a>`) + `
+    <div class="tabs row" style="margin-bottom:14px">
+      <button class="btn sm primary" data-tab="sessions">Sesiones</button>
+      <button class="btn sm" data-tab="memory">Memoria</button>
+      <button class="btn sm" data-tab="config">Config (YAML)</button>
+    </div>
+    <div id="ad-body"></div>`;
+  const body = $('#ad-body', view);
+  const tabs = {
+    sessions: () => `<div class="card"><table><thead><tr><th>Sesión</th><th>Plataforma</th><th>Mensajes</th><th>Actualizada</th></tr></thead><tbody>` +
+      sessions.map((s) => `<tr><td>${esc(s.title)}</td><td><span class="badge">${esc(s.platform)}</span></td><td>${s.messages}</td><td class="muted">${new Date(s.updated).toLocaleString('es')}</td></tr>`).join('') + `</tbody></table></div>`,
+    memory: () => `<div class="grid cols-2">` + memFiles.map((f) => `
+      <div class="card"><h3>${esc(f)}</h3>
+        <textarea data-mem="${esc(f)}" style="width:100%;height:240px;font-family:ui-monospace,monospace">${esc(mem.files[f])}</textarea>
+        <div style="margin-top:8px"><button class="btn primary sm" data-savemem="${esc(f)}">Guardar</button></div>
+      </div>`).join('') + `</div>`,
+    config: () => `<div class="card"><textarea id="ad-cfg" style="width:100%;height:340px;font-family:ui-monospace,monospace">${esc(cfg.yaml)}</textarea>
+      <div style="margin-top:8px"><button class="btn primary" id="ad-savecfg">Guardar config</button></div></div>`,
+  };
+  function show(tab) {
+    view.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('primary', b.dataset.tab === tab));
+    body.innerHTML = tabs[tab]();
+    body.querySelectorAll('[data-savemem]').forEach((b) => b.addEventListener('click', async () => {
+      const f = b.dataset.savemem; const content = body.querySelector(`[data-mem="${f}"]`).value;
+      try { const r = await api('/agents/' + encodeURIComponent(profile) + '/memory', { method: 'POST', body: { file: f, content } }); toast(r.output || 'Guardado'); } catch (e) { toast(e.message, 'err'); }
+    }));
+    const sc = $('#ad-savecfg', body);
+    if (sc) sc.addEventListener('click', async () => {
+      try { const r = await api('/agents/' + encodeURIComponent(profile) + '/config', { method: 'POST', body: { yaml: $('#ad-cfg', body).value } }); toast(r.output || 'Guardado'); } catch (e) { toast(e.message, 'err'); }
+    });
+  }
+  view.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
+  show('sessions');
+}
+
+// ---------- Workspace (Files + chat con cwd) ----------
+async function renderWorkspace(view) {
+  view.innerHTML = head('Workspace', 'Explora un proyecto y pídele cambios a Hermes con ese contexto') + `
+    <div class="grid" style="grid-template-columns: 1fr 1fr; gap:16px; align-items:start">
+      <div class="card"><h3>Archivos</h3><div id="ws-files"></div></div>
+      <div class="card"><h3>Pídele al agente</h3>
+        <p class="muted" style="font-size:12px">Escribe una instrucción; se enviará al chat con la ruta actual como contexto.</p>
+        <textarea id="ws-prompt" style="width:100%;height:120px" placeholder="p.ej. Añade manejo de errores a este archivo"></textarea>
+        <div style="margin-top:8px"><button class="btn primary" id="ws-send">Enviar al chat →</button></div>
+        <div id="ws-cwd" class="muted mono" style="margin-top:8px"></div>
+      </div>
+    </div>`;
+  let cwd = '';
+  async function browse(p) {
+    const data = await api('/files?path=' + encodeURIComponent(p));
+    cwd = p; $('#ws-cwd', view).textContent = 'cwd: /' + (p || '');
+    const list = $('#ws-files', view);
+    list.innerHTML = `<ul class="file-list">` +
+      (p ? `<li data-dir="${esc(p.split('/').slice(0, -1).join('/'))}">📁 ..</li>` : '') +
+      data.entries.map((e) => `<li data-${e.dir ? 'dir' : 'file'}="${esc((p ? p + '/' : '') + e.name)}">${e.dir ? '📁' : '📄'} ${esc(e.name)}</li>`).join('') + `</ul>`;
+    list.querySelectorAll('[data-dir]').forEach((li) => li.addEventListener('click', () => browse(li.dataset.dir)));
+  }
+  $('#ws-send', view).addEventListener('click', () => {
+    const prompt = $('#ws-prompt', view).value.trim();
+    if (!prompt) return;
+    sessionStorage.setItem('ws-handoff', `[contexto: ${cwd || '/'}]\n${prompt}`);
+    location.hash = '#chat';
+  });
+  browse('');
+}
+
+// ---------- Terminal ----------
+async function renderTerminal(view) {
+  view.innerHTML = head('Terminal', 'Ejecuta comandos en el servidor (detrás de permiso)') + `
+    <div class="card" style="padding:0">
+      <div class="console" id="term-out" style="max-height:calc(100vh - 280px)">Bienvenido al terminal de Hermes Control Panel.\nEscribe un comando y pulsa Enter.\n</div>
+      <div class="chat-input" style="padding:12px">
+        <span class="mono" style="align-self:center">$</span>
+        <textarea id="term-in" style="flex:1;height:40px" placeholder="ls -la"></textarea>
+        <button class="btn primary" id="term-run">Run</button>
+      </div>
+    </div>`;
+  const out = $('#term-out', view);
+  function append(t) { out.textContent += t; out.scrollTop = out.scrollHeight; }
+  async function run() {
+    const cmd = $('#term-in', view).value.trim();
+    if (!cmd) return;
+    append(`\n$ ${cmd}\n`);
+    $('#term-in', view).value = '';
+    try { const r = await api('/terminal/exec', { method: 'POST', body: { cmd } }); append(r.output || (r.ok ? '(sin salida)\n' : 'error\n')); }
+    catch (e) { append('⚠️ ' + e.message + '\n'); }
+  }
+  $('#term-run', view).addEventListener('click', run);
+  $('#term-in', view).addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(); } });
+}
+
+// ---------- Monitor ----------
+async function renderMonitor(view) {
+  view.innerHTML = head('Monitor', 'Métricas en vivo y procesos') + `
+    <div class="grid cols-3">
+      <div class="card"><h3>CPU</h3><div class="stat" id="mon-cpu">…</div><div class="bar"><span id="mon-cpu-bar"></span></div></div>
+      <div class="card"><h3>Memoria</h3><div class="stat" id="mon-mem">…</div><div class="bar"><span id="mon-mem-bar"></span></div></div>
+      <div class="card"><h3>Carga</h3><div class="stat" id="mon-load">…</div></div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3>Procesos</h3><div id="mon-proc"></div></div>`;
+  async function refresh() {
+    try {
+      const m = await api('/monitor/metrics');
+      $('#mon-cpu', view).textContent = m.cpuPct + '%'; $('#mon-cpu-bar', view).style.width = m.cpuPct + '%';
+      $('#mon-mem', view).textContent = m.memPct + '%'; $('#mon-mem-bar', view).style.width = m.memPct + '%';
+      $('#mon-load', view).textContent = m.load1;
+      const p = await api('/monitor/processes');
+      $('#mon-proc', view).innerHTML = `<table><thead><tr><th>PID</th><th>Proceso</th><th>CPU%</th><th>MEM (MB)</th><th>Uptime</th></tr></thead><tbody>` +
+        p.processes.map((x) => `<tr><td class="mono">${x.pid}</td><td>${esc(x.name)}</td><td>${x.cpu}</td><td>${x.mem}</td><td class="muted">${fmtUptime(x.uptimeSec)}</td></tr>`).join('') + `</tbody></table>`;
+    } catch {}
+  }
+  await refresh();
+  window.__pageTimer = setInterval(refresh, 4000);
+}
+
+// ---------- Maintenance ----------
+async function renderMaintenance(view) {
+  const doc = await api('/maintenance/doctor').catch(() => ({ checks: [] }));
+  view.innerHTML = head('Mantenimiento', 'Backup, restauración, diagnóstico y actualización') + `
+    <div class="grid cols-2">
+      <div class="card"><h3>System doctor</h3><div id="mt-doctor">` +
+      doc.checks.map((c) => `<div class="row" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span><span class="dot ${c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : 'err'}"></span> ${esc(c.name)}</span><span class="muted">${esc(c.detail)}</span></div>`).join('') + `</div></div>
+      <div class="card"><h3>Acciones</h3><div class="row">
+        <a class="btn" href="/api/maintenance/backup" download>⬇️ Backup</a>
+        <button class="btn" id="mt-update">↻ Actualizar panel</button>
+      </div>
+      <div style="margin-top:14px"><label>Restaurar (pega un backup JSON)</label>
+        <textarea id="mt-restore" style="width:100%;height:120px;font-family:ui-monospace,monospace" placeholder='{"cron":[...],"usage":{...}}'></textarea>
+        <div style="margin-top:8px"><button class="btn primary" id="mt-restore-btn">Restaurar</button></div>
+      </div></div>
+    </div>`;
+  $('#mt-update', view).addEventListener('click', async () => {
+    try { const r = await api('/maintenance/update', { method: 'POST', body: {} }); toast(r.output || 'OK'); } catch (e) { toast(e.message, 'err'); }
+  });
+  $('#mt-restore-btn', view).addEventListener('click', async () => {
+    let payload; try { payload = JSON.parse($('#mt-restore', view).value); } catch { return toast('JSON inválido', 'err'); }
+    try { const r = await api('/maintenance/restore', { method: 'POST', body: payload }); toast(r.output || 'OK'); } catch (e) { toast(e.message, 'err'); }
+  });
+}
+
+// ---------- Usuarios (RBAC) ----------
+async function renderUsers(view) {
+  const [list, perms] = await Promise.all([api('/users'), api('/permissions')]);
+  view.innerHTML = head('Usuarios', 'Control de acceso por roles y perfiles') + `
+    <div class="card" style="margin-bottom:16px">
+      <h3>Nuevo usuario</h3>
+      <div class="grid cols-4">
+        <div><label>Usuario</label><input id="u-name"></div>
+        <div><label>Contraseña</label><input id="u-pass" type="password"></div>
+        <div><label>Rol</label><select id="u-role"><option value="custom">custom</option><option value="viewer">viewer</option><option value="admin">admin</option></select></div>
+        <div><label>Perfiles permitidos (coma o *)</label><input id="u-prof" value="*"></div>
+      </div>
+      <div style="margin-top:10px"><button class="btn primary" id="u-add">+ Crear usuario</button></div>
+    </div>
+    <div class="card"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Perfiles</th><th>Permisos</th><th></th></tr></thead><tbody>` +
+    list.map((u) => `<tr><td><strong>${esc(u.username)}</strong></td><td><span class="badge">${esc(u.role)}</span></td><td class="mono">${(u.allowed_profiles || []).join(', ')}</td><td class="muted" style="font-size:11px">${u.role === 'admin' ? 'todos' : (u.permissions || []).length + ' permisos'}</td>
+      <td>${u.username === 'admin' ? '' : `<button class="btn sm danger" data-del="${esc(u.id)}">✕</button>`}</td></tr>`).join('') +
+    `</tbody></table></div>
+    <p class="muted" style="margin-top:8px;font-size:12px">Permisos disponibles: ${perms.permissions.join(', ')}</p>`;
+  $('#u-add', view).addEventListener('click', async () => {
+    const body = {
+      username: $('#u-name', view).value.trim(),
+      password: $('#u-pass', view).value,
+      role: $('#u-role', view).value,
+      allowed_profiles: $('#u-prof', view).value.split(',').map((s) => s.trim()).filter(Boolean),
+    };
+    if (!body.username || !body.password) return toast('Usuario y contraseña obligatorios', 'err');
+    try { await api('/users', { method: 'POST', body }); toast('Usuario creado'); router(); } catch (e) { toast(e.message, 'err'); }
+  });
+  view.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+    try { await api('/users/' + b.dataset.del, { method: 'DELETE' }); toast('Eliminado'); router(); } catch (e) { toast(e.message, 'err'); }
+  }));
+}
+
+// ---------- Ajustes ----------
+async function renderSettings(view) {
+  const [status, prov] = await Promise.all([api('/status'), api('/chat/provider').catch(() => ({}))]);
+  view.innerHTML = head('Ajustes', 'Estado del panel y del agente') + `
+    <div class="grid cols-2">
+      <div class="card"><h3>Sistema</h3>
+        <div class="row" style="justify-content:space-between"><span class="muted">Modo</span><span class="badge ${status.mode === 'live' ? 'ok' : 'warn'}">${esc(status.mode)}</span></div>
+        <div class="row" style="justify-content:space-between"><span class="muted">Versión Hermes</span><span>${esc(status.version)}</span></div>
+        <div class="row" style="justify-content:space-between"><span class="muted">Host</span><span>${esc(status.health.hostname)}</span></div>
+        <div class="row" style="justify-content:space-between"><span class="muted">Usuario</span><span>${esc(state.user.username)} (${esc(state.user.role)})</span></div>
+      </div>
+      <div class="card"><h3>Chat / Agente</h3>
+        <div class="row" style="justify-content:space-between"><span class="muted">Proveedor</span><span class="badge">${esc(prov.label || prov.provider || '—')}</span></div>
+        <div class="row" style="justify-content:space-between"><span class="muted">Modelo</span><span class="mono">${esc(prov.model || '—')}</span></div>
+        <p class="muted" style="font-size:12px;margin-top:10px">Para cambiar proveedor/modelo, edita <span class="mono">.env</span> (CHAT_PROVIDER, LLM_BASE_URL, LLM_MODEL) y reinicia. Ver README.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px"><h3>Acerca de</h3>
+      <p class="muted">Hermes Control Panel — inspirado en el panel del video (HCI) y en las mejores ideas de OpenClaw, OpenCode y Claude Code. Ver <a href="#recommendations">Recomendaciones</a> y el archivo PLAN.md del repo.</p>
+    </div>`;
 }
 
 // ---------- boot ----------

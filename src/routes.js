@@ -2,13 +2,15 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { exec } from 'node:child_process';
 import config from './config.js';
 import hermes from './hermes.js';
 import demo from './demo.js';
 import store from './store.js';
 import { recommendations } from './recommendations.js';
 import chat from './chat.js';
-import { requireAuth, requireCsrf } from './auth.js';
+import users from './users.js';
+import { requireAuth, requireCsrf, requirePerm } from './auth.js';
 
 export function apiRouter() {
   const api = express.Router();
@@ -182,10 +184,83 @@ export function apiRouter() {
   // -------- Office / ZOO Swarm Monitor --------
   api.get('/office/agent-states', (req, res) => res.json({ ok: true, agents: demo.officeAgents() }));
   api.get('/office/kanban', (req, res) => res.json(demo.officeKanban((req.query.board || 'main').toString())));
+  api.get('/office/kanban/:id', (req, res) => res.json(demo.taskDetail(req.params.id)));
+  api.post('/office/kanban/:id/action', requirePerm('manage_office'), (req, res) => {
+    const action = (req.body?.action || '').toString();
+    res.json({ ok: true, output: `[demo] tarea ${req.params.id} -> ${action}` });
+  });
   api.get('/office/events', (req, res) => res.json(demo.officeEvents()));
+
+  // -------- Detalle de agente --------
+  api.get('/agents/:profile/sessions', (req, res) => res.json(demo.agentSessions(req.params.profile)));
+  api.get('/agents/:profile/memory', (req, res) => res.json({ files: demo.agentMemory(req.params.profile) }));
+  api.post('/agents/:profile/memory', requirePerm('manage_agents'), (req, res) => {
+    res.json({ ok: true, output: `[demo] memoria de ${req.params.profile} (${req.body?.file}) guardada` });
+  });
+  api.get('/agents/:profile/config', (req, res) => res.json({ yaml: demo.agentConfig(req.params.profile) }));
+  api.post('/agents/:profile/config', requirePerm('manage_agents'), (req, res) => {
+    res.json({ ok: true, output: `[demo] config de ${req.params.profile} guardada` });
+  });
+
+  // -------- Monitor --------
+  api.get('/monitor/processes', (req, res) => res.json({ processes: demo.processes() }));
+  api.get('/monitor/metrics', (req, res) => res.json(hermes.systemHealth()));
+
+  // -------- Maintenance --------
+  api.get('/maintenance/doctor', (req, res) => res.json(demo.doctor()));
+  api.get('/maintenance/backup', requirePerm('manage_maintenance'), (req, res) => {
+    const dump = {
+      generatedAt: new Date().toISOString(),
+      cron: store.read('cron', []),
+      usage: store.read('usage', {}),
+      users: store.read('users', []).map(({ passwordHash, ...u }) => u),
+    };
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="hermes-panel-backup.json"');
+    res.send(JSON.stringify(dump, null, 2));
+  });
+  api.post('/maintenance/restore', requirePerm('manage_maintenance'), (req, res) => {
+    const { cron, usage } = req.body || {};
+    if (Array.isArray(cron)) store.write('cron', cron);
+    if (usage && typeof usage === 'object') store.write('usage', usage);
+    res.json({ ok: true, output: 'restauración aplicada (cron/usage)' });
+  });
+  api.post('/maintenance/update', requirePerm('manage_maintenance'), (req, res) => {
+    res.json({ ok: true, output: '[demo] git pull + npm install + restart simulado' });
+  });
 
   // -------- Chat: proveedor activo --------
   api.get('/chat/provider', async (req, res) => res.json(await chat.providerInfo()));
+
+  // -------- Terminal (ejecución de comandos, behind use_terminal) --------
+  api.post('/terminal/exec', requirePerm('use_terminal'), (req, res) => {
+    const cmd = (req.body?.cmd || '').toString().trim();
+    if (!cmd) return res.status(400).json({ error: 'comando vacío' });
+    exec(cmd, { cwd: config.projectsRoot, timeout: 20000, maxBuffer: 1024 * 1024 * 4, shell: '/bin/bash' },
+      (err, stdout, stderr) => {
+        res.json({
+          ok: !err,
+          code: err?.code ?? 0,
+          output: (stdout || '') + (stderr || '') + (err && !stdout && !stderr ? err.message : ''),
+        });
+      });
+  });
+
+  // -------- Usuarios / RBAC (solo admin / manage_users) --------
+  api.get('/permissions', (req, res) => res.json({ permissions: users.PERMISSIONS }));
+  api.get('/users', requirePerm('manage_users'), (req, res) => res.json(users.listUsers()));
+  api.post('/users', requirePerm('manage_users'), (req, res) => {
+    try { res.json(users.createUser(req.body || {})); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+  });
+  api.put('/users/:id', requirePerm('manage_users'), (req, res) => {
+    try { res.json(users.updateUser(req.params.id, req.body || {})); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+  });
+  api.delete('/users/:id', requirePerm('manage_users'), (req, res) => {
+    try { res.json(users.deleteUser(req.params.id)); }
+    catch (e) { res.status(400).json({ error: e.message }); }
+  });
 
   return api;
 }

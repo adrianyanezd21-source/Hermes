@@ -17,6 +17,9 @@ Owns all backend modules. Consumed by the root `server.js`.
 - `auth.js` — bcrypt password gate + per-session CSRF (`requireAuth`, `requireCsrf`, `issueCsrf`). All mutating API methods stay behind both.
 - `routes.js` — `/api` router; mounts under auth + CSRF. File explorer must keep path-traversal protection (`safeResolve`).
 - `recommendations.js` — content shown on the Recommendations page; tagged `channel` vs `extra`.
+- `users.js` — RBAC store (`data/users.json`): users, roles (admin/viewer/custom), 20 permissions, `allowed_profiles`. Seeds an `admin` from `HERMES_CONTROL_PASSWORD`. Helpers: `authenticate`, `hasPerm`, `canAccessProfile`, CRUD.
+- `auth.js` now does user-based login (`authenticate`), `requireAuth` (loads `req.user`), `requirePerm(perm)` middleware, and CSRF. Login accepts `{username,password}` (username defaults to `admin`).
+- New API endpoints in `routes.js`: agent detail (`/agents/:profile/sessions|memory|config`), office task detail/action (`/office/kanban/:id`, `/:id/action`), monitor (`/monitor/processes|metrics`), maintenance (`/maintenance/doctor|backup|restore|update`), terminal (`POST /terminal/exec`, real `bash` exec behind `use_terminal`), users CRUD (`/users`, `manage_users`), `/permissions`. Sensitive routes use `requirePerm`.
 - `llm.js` — OpenAI-compatible streaming client (SSE). Powers the FREE chat option: OpenRouter `:free` models. Reads `llmBaseUrl`/`llmApiKey`/`llmModel` from config.
 - `chat.js` — chat orchestrator. `resolveProvider()` picks (auto): explicit `CHAT_PROVIDER` > Hermes CLI > LLM (`llm.js`) > demo. `stream()` is the single entry used by the server WebSocket; `providerInfo()` backs `/api/chat/provider`.
 - Office endpoints in `routes.js` (`/office/agent-states`, `/office/kanban`, `/office/events`) are read-only and currently served from `demo.js` (`officeAgents`/`officeKanban`/`officeEvents`); replace with live Hermes data when available, keeping the same shapes.

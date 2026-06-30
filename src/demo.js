@@ -196,10 +196,10 @@ export function officeAgents() {
 }
 
 export function officeKanban(board = 'main') {
-  const cols = ['triage', 'todo', 'running', 'review', 'done'];
+  const cols = ['triage', 'todo', 'scheduled', 'ready', 'running', 'blocked', 'review', 'done'];
   const titles = {
-    main: ['Resumen diario noticias', 'Refactor del gateway', 'Investigar competidor X', 'Generar imágenes campaña', 'Backup memoria', 'Responder DMs', 'Auditar skills', 'Informe semanal'],
-    dev: ['Fix bug WebSocket', 'Tests de auth', 'Migrar a SQLite', 'Optimizar polling'],
+    main: ['Resumen diario noticias', 'Refactor del gateway', 'Investigar competidor X', 'Generar imágenes campaña', 'Backup memoria', 'Responder DMs', 'Auditar skills', 'Informe semanal', 'Limpiar logs', 'Preparar demo'],
+    dev: ['Fix bug WebSocket', 'Tests de auth', 'Migrar a SQLite', 'Optimizar polling', 'Documentar API'],
     content: ['Guion vídeo', 'Hilo de X', 'Newsletter', 'Miniatura'],
     trading: ['Análisis BTC', 'Alertas precio', 'Backtest', 'Resumen mercado'],
   };
@@ -212,7 +212,86 @@ export function officeKanban(board = 'main') {
     agent: agentsList[i % agentsList.length],
     priority: ['low', 'med', 'high'][i % 3],
   }));
-  return { ok: true, board, tasks, links: [{ from: board + '-0', to: board + '-2' }] };
+  return { ok: true, board, tasks, links: [{ from: board + '-0', to: board + '-2' }, { from: board + '-1', to: board + '-4' }] };
+}
+
+export function taskDetail(id) {
+  const agentsList = ['jorah', 'varys', 'samwell', 'davos'];
+  const now = Date.now();
+  return {
+    ok: true,
+    task: {
+      id,
+      title: 'Tarea ' + id,
+      status: 'running',
+      agent: agentsList[Math.abs(hashCode(id)) % agentsList.length],
+      priority: 'med',
+      created: new Date(now - 3600000 * 5).toISOString(),
+      description: 'Tarea de demostración. Aquí iría la descripción real de la tarea del pipeline de Hermes.',
+    },
+    runs: [
+      { id: 'r1', started: new Date(now - 3600000 * 2).toISOString(), status: 'done', durationSec: 142, tokens: 18400 },
+      { id: 'r2', started: new Date(now - 3600000).toISOString(), status: 'running', durationSec: null, tokens: 5200 },
+    ],
+    events: officeEvents().events.slice(0, 8),
+  };
+}
+
+function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h << 5) - h + s.charCodeAt(i) | 0; return h; }
+
+// ----------------------------------------------------------------
+//  Detalle de agente
+// ----------------------------------------------------------------
+export function agentSessions(profile) {
+  const now = Date.now();
+  const out = [];
+  for (let i = 0; i < 8; i++) {
+    out.push({
+      id: 's-' + profile + '-' + i,
+      title: ['Investigación de mercado', 'Resumen de reunión', 'Debug del gateway', 'Plan de contenido', 'Consulta rápida'][i % 5],
+      platform: ['cli', 'telegram', 'discord', 'slack'][i % 4],
+      messages: 4 + Math.round(Math.random() * 40),
+      updated: new Date(now - i * 3600000 * 3).toISOString(),
+    });
+  }
+  return out;
+}
+
+export function agentMemory(profile) {
+  return {
+    'MEMORY.md': `# Memoria de ${profile}\n\n- El usuario prefiere respuestas concisas en español.\n- Proyecto principal: panel de control de Hermes.\n- Zona horaria: Europe/Madrid.\n- Modelo preferido para tareas baratas: deepseek-chat.\n`,
+    'USER.md': `# Usuario\n\n- Nombre: Adrián\n- Rol: desarrollador\n- Objetivo: automatizar flujos con Hermes.\n`,
+  };
+}
+
+export function agentConfig(profile) {
+  return `# Perfil ${profile} (demo)\nname: ${profile}\nmodel: anthropic/claude-opus-4\npersonality: |\n  Asistente útil y conciso.\ntoolsets:\n  - web_search\n  - terminal\n  - memory\ngateways:\n  - discord\n  - telegram\ncron:\n  enabled: true\n`;
+}
+
+// ----------------------------------------------------------------
+//  Monitor
+// ----------------------------------------------------------------
+export function processes() {
+  return [
+    { pid: 48213, name: 'hermes gateway', cpu: 2.1, mem: 184, uptimeSec: 73820 },
+    { pid: 51002, name: 'mcp: github', cpu: 0.4, mem: 64, uptimeSec: 51200 },
+    { pid: 51044, name: 'mcp: composio', cpu: 1.2, mem: 142, uptimeSec: 51180 },
+    { pid: 10274, name: 'hermes-control-panel', cpu: 0.8, mem: 96, uptimeSec: 3600 },
+  ];
+}
+
+export function doctor() {
+  return {
+    ok: true,
+    checks: [
+      { name: 'Node.js >= 20', status: 'ok', detail: process.version },
+      { name: 'CLI de Hermes en PATH', status: 'warn', detail: 'no detectado (modo demo)' },
+      { name: 'Directorio de estado ~/.hermes', status: 'warn', detail: 'no encontrado (demo)' },
+      { name: 'Proveedor de chat configurado', status: 'ok', detail: 'demo/openrouter' },
+      { name: 'Espacio en disco', status: 'ok', detail: 'suficiente' },
+      { name: 'Puerto del panel libre', status: 'ok', detail: 'en uso por el panel' },
+    ],
+  };
 }
 
 export function officeEvents() {
@@ -236,6 +315,12 @@ export default {
   officeAgents,
   officeKanban,
   officeEvents,
+  taskDetail,
+  agentSessions,
+  agentMemory,
+  agentConfig,
+  processes,
+  doctor,
   gatewayControl,
   skills,
   skillAction,

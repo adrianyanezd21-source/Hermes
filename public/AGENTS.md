@@ -16,8 +16,10 @@ Owns the HTML shell, styles, and client JS. Talks only to the backend `/api` and
 
 ## Pages of note
 
-- **Office** (`renderOffice`) — PixiJS isometric animated office: floor tiles, desks, one character per agent with a status-colored ring + bob animation; polls `/api/office/agent-states` (4s) plus kanban and live-feed panels. Its Pixi app + interval MUST be torn down by `teardownTransient()` (called at the top of `router()`), or the WebGL ticker leaks across navigations.
-- **Chat** (`renderChat`) — shows the active provider badge from `/api/chat/provider` and warns when in demo mode. Includes FREE browser voice: TTS (`speechSynthesis`, toggle + voice picker, prioritizes `es-*` voices, speaks the full reply on `done`) and mic dictation (`SpeechRecognition`/`webkitSpeechRecognition`, `es-ES`). No API key needed. The CSP must keep `blob:` in `script-src`/`img-src` and a `worker-src 'self' blob:` for PixiJS.
+- **Office** (`renderOffice`) — PixiJS isometric animated office: floor tiles, desks, one character per agent with a status-colored ring + bob animation; polls `/api/office/agent-states` (4s) plus kanban (8 lanes) and live-feed panels. Its Pixi app + interval MUST be torn down by `teardownTransient()` (called at the top of `router()`), or the WebGL ticker leaks across navigations.
+- **Chat** (`renderChat`) — agent chat with FREE browser voice (TTS `speechSynthesis` + mic `SpeechRecognition`), provider badge, and coding-agent UX synthesized from OpenCode/Claude Code/OpenClaw: slash commands (`/help /clear /new /plan /think /status /model`), **Plan mode** (prepends a plan directive), **thinking level** (low/medium/high), Stop button, and Workspace handoff via `sessionStorage['ws-handoff']`. The CSP must keep `blob:` in `script-src`/`img-src` and `worker-src 'self' blob:` for PixiJS.
+- **Other pages**: `renderAgentDetail` (sessions/memory/config tabs), `renderWorkspace` (file browse + chat handoff), `renderTerminal` (real command exec via `/api/terminal/exec`), `renderMonitor` (live metrics + processes, uses `window.__pageTimer`), `renderMaintenance` (doctor/backup/restore/update), `renderUsers` (RBAC CRUD), `renderSettings`.
+- **Navigation/permissions**: `PAGES` entries carry a `perm`; `visiblePages()` filters the nav and `router()` blocks access by permission. `can(perm)` reads `state.user.permissions`. `router()` supports `#page/arg` (used by `#agent/<profile>`).
 
 ## Work Guidance
 
