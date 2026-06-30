@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b0f17" />
+  <title>Hermes Control Panel</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script defer src="/js/app.js"></script>
+</head>
+<body>
+  <!-- Login -->
+  <div id="login" class="login hidden">
+    <form id="login-form" class="login-card">
+      <div class="login-logo">⚡ Hermes</div>
+      <p class="login-sub">Control Panel</p>
+      <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password" />
+      <button type="submit">Entrar</button>
+      <div id="login-error" class="login-error"></div>
+    </form>
+  </div>
+
+  <!-- App -->
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand">⚡ <span>Hermes</span></div>
+      <nav id="nav"></nav>
+      <div class="sidebar-foot">
+        <span id="mode-badge" class="badge">…</span>
+        <button id="logout" class="btn-ghost" title="Salir">⎋</button>
+      </div>
+    </aside>
+    <main id="view" class="view"></main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+</body>
+</html>

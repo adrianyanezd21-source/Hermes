@@ -1,0 +1,29 @@
+{
+  "name": "hermes-control-panel",
+  "version": "1.0.0",
+  "description": "Panel web auto-alojado para controlar el agente Hermes de Nous Research: chat, agentes, gateway, skills, cron, MCP, archivos, uso de tokens, logs y recomendaciones.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "hermes",
+    "nous-research",
+    "ai-agent",
+    "dashboard",
+    "control-panel"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "ws": "^8.18.0"
+  }
+}
